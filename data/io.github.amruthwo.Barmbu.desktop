@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=bARMbu Studio Helper
+Name=BARMbu Studio Helper
 GenericName=Bambu network plugin setup
 Comment=Set up Bambu Studio with Bambu Lab's network plugin on an ARM computer
 Exec=barmbu-gui

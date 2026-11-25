@@ -18,7 +18,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/app-dark.png">
-    <img src="docs/images/app-light.png" width="460" alt="The bARMbu Studio Helper window: a checklist showing Bambu Studio, the x86 emulator, the x86 copy, extra libraries and the network plugin all ready">
+    <img src="docs/images/app-light.png" width="460" alt="The BARMbu Studio Helper window: a checklist showing Bambu Studio, the x86 emulator, the x86 copy, extra libraries and the network plugin all ready">
   </picture>
 </p>
 
@@ -28,7 +28,7 @@
 
 Bambu Studio's printer features (sending prints, the camera, the device
 tab) live in a closed-source network plugin that Bambu only builds for x86
-PCs. bARMbu Studio Helper runs Bambu's real plugin on ARM. Open the app,
+PCs. BARMbu Studio Helper runs Bambu's real plugin on ARM. Open the app,
 press **Set Up**, then open Bambu Studio from your app menu.
 
 ---
@@ -76,7 +76,7 @@ sudo apt install ./barmbu_*_all.deb            # Debian / Ubuntu
 flatpak install --user barmbu-*.flatpak        # any distro (aarch64)
 ```
 
-Then open **bARMbu Studio Helper** from your app menu.
+Then open **BARMbu Studio Helper** from your app menu.
 
 If the emulator isn't installed yet, the app shows an **Install** button
 (it asks for your password). See [Supported systems](#supported-systems) for
@@ -104,6 +104,16 @@ default kernel.
   app shows a **Switch** button (or run `barmbu pi-4k-kernel`), which adds
   `kernel=kernel8.img` to `/boot/firmware/config.txt` and keeps a backup.
   Restart, and you're set. `barmbu pi-4k-kernel --undo` switches back.
+
+  What this changes: the Pi boots Raspberry Pi's own generic 64-bit kernel
+  (the one Pi 3 and 4 use, which supports the Pi 5) instead of the Pi 5
+  tuned one. Raspberry Pi OS installs and updates both, with their modules,
+  so nothing is downloaded or replaced. Expect a few percent less speed in
+  some memory-heavy work. Programs that dislike 16K pages tend to work
+  better, not worse. If `config.txt` already picks a kernel, the app leaves
+  it alone. If the Pi ever doesn't boot, put the SD card in another computer
+  and delete the `kernel=kernel8.img` line from `config.txt`, or copy
+  `config.txt.barmbu-backup` over it.
 * **Other 16K kernels:** install muvm if your distro has it, or boot a 4K
   kernel.
 

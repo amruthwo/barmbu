@@ -290,6 +290,11 @@ class EmulatorSetupTests(unittest.TestCase):
                 self.assertEqual(cfg.read_text().count("kernel=kernel8.img"), 1)
                 subprocess.run(["sh", "-c", es.pi_kernel_script(undo=True)], check=True)
                 self.assertNotIn("kernel8", cfg.read_text())
+                cfg.write_text("kernel=my-own.img\n")
+                self.assertEqual(es.pi_custom_kernel_line(), "kernel=my-own.img")
+                r = subprocess.run(["sh", "-c", es.pi_kernel_script()], capture_output=True)
+                self.assertEqual(r.returncode, 3)
+                self.assertEqual(cfg.read_text(), "kernel=my-own.img\n")
             finally:
                 es.PI_CONFIG_CANDIDATES = old
 

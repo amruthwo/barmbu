@@ -2,8 +2,8 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-    echo "bARMbu Studio Helper installed."
-    echo "Open 'bARMbu Studio Helper' from your app menu and press Set Up,"
+    echo "BARMbu Studio Helper installed."
+    echo "Open 'BARMbu Studio Helper' from your app menu and press Set Up,"
     echo "or run:  barmbu install --download-studio"
 fi
 

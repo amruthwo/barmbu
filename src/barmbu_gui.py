@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bARMbu Studio Helper -- a one-button front-end for barmbu.
+BARMbu Studio Helper -- a one-button front-end for barmbu.
 
 The window shows a short checklist of what's needed and one big button.
 All the real work is done by barmbu.py, which this window runs
@@ -56,7 +56,7 @@ class StatusRow(Adw.ActionRow):
 
 class Window(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application):
-        super().__init__(application=app, title="bARMbu Studio Helper")
+        super().__init__(application=app, title="BARMbu Studio Helper")
         self.set_default_size(560, 820)
         self.status: dict = {}
         self.busy = False
@@ -186,7 +186,7 @@ class Window(Adw.ApplicationWindow):
     def show_tool_update(self, upd: dict) -> bool:
         self.tool_update = upd
         self.update_banner.set_title(
-            f"bARMbu Studio Helper {upd['version']} is available "
+            f"BARMbu Studio Helper {upd['version']} is available "
             f"(you have {core.__version__})")
         self.update_banner.set_button_label(
             "Update" if upd.get("asset") and upd["kind"] != "source" else "Download")
@@ -445,7 +445,7 @@ class Window(Adw.ApplicationWindow):
 
     def on_about(self, *_a) -> None:
         about = Adw.AboutDialog(
-            application_name="bARMbu Studio Helper",
+            application_name="BARMbu Studio Helper",
             application_icon=APP_ID,
             version=core.__version__,
             developer_name="barmbu contributors",

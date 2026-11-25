@@ -120,6 +120,18 @@ def pi_4k_kernel_configured() -> bool:
         return False
 
 
+def pi_custom_kernel_line() -> Optional[str]:
+    """An existing 'kernel=' line that isn't ours (we then leave config.txt alone)."""
+    cfg = pi_config_file()
+    try:
+        lines = cfg.read_text().splitlines() if cfg else []
+    except OSError:
+        return None
+    return next((ln.strip() for ln in lines
+                 if ln.strip().startswith("kernel=") and ln.strip() != PI_KERNEL_LINE),
+                None)
+
+
 def pi_kernel_script(undo: bool = False) -> Optional[str]:
     """Root shell script that adds (or removes) the 4K-kernel line."""
     cfg = pi_config_file()
@@ -130,6 +142,9 @@ def pi_kernel_script(undo: bool = False) -> Optional[str]:
                 f"sed -i '/^{re.escape(PI_MARK)}$/,/^{PI_KERNEL_LINE}$/d' '{cfg}'\n")
     # [all] makes sure the line isn't swallowed by an earlier [pi4]/[cm5] filter.
     return (f"set -e\ngrep -qx '{PI_KERNEL_LINE}' '{cfg}' && exit 0\n"
+            # Someone already picked a kernel (custom build, other tool): don't touch it.
+            f"if grep -Eq '^[[:space:]]*kernel=' '{cfg}'; then\n"
+            f"  echo 'config.txt already selects a kernel; not changing it' >&2; exit 3\nfi\n"
             f"cp '{cfg}' '{cfg}.barmbu-backup'\n"
             f"printf '\\n%s\\n[all]\\n%s\\n' '{PI_MARK}' '{PI_KERNEL_LINE}' >> '{cfg}'\n")
 

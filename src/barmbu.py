@@ -1149,17 +1149,17 @@ def cmd_check_update(args) -> int:
     if args.json:
         print(json.dumps({"current": __version__, "update": upd}))
     elif upd:
-        info(f"bARMbu Studio Helper {upd['version']} is available "
+        info(f"BARMbu Studio Helper {upd['version']} is available "
              f"(you have {__version__}). Run: barmbu self-update")
     else:
-        ok(f"bARMbu Studio Helper {__version__} is up to date")
+        ok(f"BARMbu Studio Helper {__version__} is up to date")
     return 0
 
 
 def cmd_self_update(args) -> int:
     upd = tool_update()
     if not upd:
-        ok(f"bARMbu Studio Helper {__version__} is up to date")
+        ok(f"BARMbu Studio Helper {__version__} is up to date")
         return 0
     kind, asset = upd["kind"], upd["asset"]
     step(1, 2, f"Downloading version {upd['version']} ({kind})")
@@ -1179,7 +1179,7 @@ def cmd_self_update(args) -> int:
         raise ToolError(f"Installing the update failed (code {res.returncode}). "
                         f"The file is in {pkg.parent}")
     shutil.rmtree(pkg.parent, ignore_errors=True)
-    ok(f"Updated to {upd['version']}. Restart bARMbu Studio Helper to use it.")
+    ok(f"Updated to {upd['version']}. Restart BARMbu Studio Helper to use it.")
     return 0
 
 
@@ -1227,6 +1227,10 @@ def cmd_setup_emulator(args) -> int:
 def cmd_pi_kernel(args) -> int:
     if not es.raspberry_pi_model():
         raise ToolError("This isn't a Raspberry Pi")
+    custom = None if args.undo else es.pi_custom_kernel_line()
+    if custom:
+        raise ToolError(f"config.txt already has '{custom}'. Not changing it; remove "
+                        "that line yourself if you want the 4K-page kernel")
     script = es.pi_kernel_script(undo=args.undo)
     if script is None:
         raise ToolError("Couldn't find config.txt next to kernel8.img in /boot")
