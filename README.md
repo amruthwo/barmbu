@@ -219,9 +219,14 @@ Checked on an M1 MacBook Air running Fedora Asahi 45:
 * Bambu's server hands out the plugin without a login, and with the plugin
   in place Studio starts the plugin's own network log and certificate store.
 
-Not yet checked: how smooth the 3D view is under emulation, and actually
-connecting to and printing on a printer. If the 3D view misbehaves, that's
-the emulator's graphics path, not the plugin.
+Heads-Up: On my P1S, video playback was never really smooth, and under emulation
+the playback is less than perfect.  I would say it's functional, but momentary
+video cutouts and low frame rates are typical. On my machine, the 3D view is 
+pretty smooth under emulation, but slicing seems to take slightly longer.  I 
+can confirm that I'm able to connect to and printing on my printer. 
+
+If the 3D view misbehaves on your machine, that's the emulator's graphics path, 
+not the plugin.
 
 The library add-on is built from Fedora packages (with `dnf`) when the
 emulator uses Fedora's root filesystem, and from Ubuntu packages (pure Python,
