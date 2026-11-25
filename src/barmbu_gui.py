@@ -103,6 +103,7 @@ class Window(Adw.ApplicationWindow):
         self.emu_button = Gtk.Button(label="Install", valign=Gtk.Align.CENTER)
         self.emu_button.add_css_class("suggested-action")
         self.emu_button.connect("clicked", self.on_install_emulator)
+        self.emu_action: list[str] = ["setup-emulator"]
         self.emu_button.set_visible(False)
         self.row_emu.add_suffix(self.emu_button)
         for r in (self.row_studio, self.row_emu, self.row_copy, self.row_libs,
@@ -235,13 +236,29 @@ class Window(Adw.ApplicationWindow):
         if arm:
             e = st["emulator"]
             if e["ready"]:
-                self.row_emu.show("ok", "FEX" + (" + muvm" if e["needs_muvm"] else "")
-                                  + " ready. Runs x86 programs on this Mac.")
+                self.row_emu.show("ok", "FEX" + (" + muvm" if e["use_muvm"] else "")
+                                  + " ready. Runs x86 programs on this computer.")
                 self.emu_button.set_visible(False)
-            else:
+            elif e["pi_model"] and e["needs_muvm"] and not e["muvm"]:
+                if e["pi_4k_pending"]:
+                    self.row_emu.show("warn", f"{e['problem']}.")
+                    self.emu_button.set_visible(False)
+                else:
+                    self.row_emu.show("warn", f"{e['problem']}. Raspberry Pi OS "
+                                      "already includes a 4K kernel: click Switch, "
+                                      "then restart.")
+                    self.emu_button.set_label("Switch")
+                    self.emu_action = ["pi-4k-kernel"]
+                    self.emu_button.set_visible(True)
+            elif e["fix"] == "barmbu setup-emulator":
                 self.row_emu.show("warn", f"{e['problem']}. Click Install "
                                   "(it will ask for your password).")
-                self.emu_button.set_visible(bool(e["install_command"]))
+                self.emu_button.set_label("Install")
+                self.emu_action = ["setup-emulator"]
+                self.emu_button.set_visible(True)
+            else:
+                self.row_emu.show("warn", f"{e['problem']}. {e['fix']}")
+                self.emu_button.set_visible(False)
 
             x = st["x86_studio"]
             if x["extracted"]:
@@ -257,7 +274,7 @@ class Window(Adw.ApplicationWindow):
             lib = st["libs_overlay"]
             if lib["path"]:
                 self.row_libs.show("ok", "Web view add-on ready "
-                                   f"({len(lib['packages'])} Fedora packages).")
+                                   f"({len(lib['packages'])} packages).")
             elif lib["needed"] == []:
                 self.row_libs.show("ok", "Nothing extra needed.")
             else:
@@ -398,14 +415,12 @@ class Window(Adw.ApplicationWindow):
                      "Everything is up to date.")
 
     def on_install_emulator(self, _btn) -> None:
-        cmd = (self.status.get("emulator") or {}).get("install_command") or []
-        if not cmd:
-            return
-        argv = ["pkexec", *cmd]
-        if core.IN_FLATPAK:
-            argv = ["flatpak-spawn", "--host", *argv]
-        self.run_job(argv, "Installing the emulator…", "Emulator installed.",
-                     use_core=False)
+        if self.emu_action == ["pi-4k-kernel"]:
+            self.run_job(self.emu_action, "Selecting the 4K-page kernel…",
+                         "Done. Restart your Pi, then open this app again.")
+        else:
+            self.run_job(["setup-emulator"], "Setting up the x86 emulator…",
+                         "Emulator ready.")
 
     def on_remove(self, *_a) -> None:
         dialog = Adw.AlertDialog(

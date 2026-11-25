@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="360" viewBox="0 0 880 360" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .host  { fill: #f4f7f6; stroke: #c9d6d1; }
+    .vm    { fill: #e6f0ec; stroke: #a9c7bb; stroke-dasharray: 6 4; }
+    .fex   { fill: #d3e9e0; stroke: #3a9b7a; }
+    .studio{ fill: #ffffff; stroke: #1f6b55; }
+    .plug  { fill: #1f6b55; }
+    .side  { fill: #ffffff; stroke: #c9d6d1; }
+    .printer { fill: #ffffff; stroke: #1f6b55; }
+    .t     { fill: #1d2b27; }
+    .m     { fill: #4d5f59; }
+    .w     { fill: #ffffff; }
+    .line  { stroke: #1f6b55; }
+    .ah    { fill: #1f6b55; }
+    @media (prefers-color-scheme: dark) {
+      .host  { fill: #161c1b; stroke: #33423d; }
+      .vm    { fill: #1b2622; stroke: #3f5a50; }
+      .fex   { fill: #1f3a31; stroke: #4fb894; }
+      .studio{ fill: #0f1514; stroke: #4fb894; }
+      .plug  { fill: #3a9b7a; }
+      .side  { fill: #0f1514; stroke: #33423d; }
+      .printer { fill: #0f1514; stroke: #4fb894; }
+      .t     { fill: #e8f0ed; }
+      .m     { fill: #a7b8b2; }
+      .line  { stroke: #4fb894; }
+      .ah    { fill: #4fb894; }
+    }
+  </style>
+
+  <!-- the ARM computer -->
+  <rect class="host" x="10" y="10" width="610" height="340" rx="18" stroke-width="1.5"/>
+  <text class="t" x="34" y="44" font-size="17" font-weight="700">Your ARM64 Linux computer</text>
+  <text class="m" x="34" y="66" font-size="13">Apple Silicon (Asahi), Raspberry Pi 5, Snapdragon, Ampere…</text>
+
+  <!-- untouched ARM studio -->
+  <rect class="side" x="34" y="92" width="150" height="232" rx="12" stroke-width="1.5"/>
+  <text class="t" x="109" y="128" font-size="14" font-weight="600" text-anchor="middle">Your Bambu</text>
+  <text class="t" x="109" y="146" font-size="14" font-weight="600" text-anchor="middle">Studio (ARM)</text>
+  <text class="m" x="109" y="182" font-size="12" text-anchor="middle">left untouched;</text>
+  <text class="m" x="109" y="198" font-size="12" text-anchor="middle">can't load x86</text>
+  <text class="m" x="109" y="214" font-size="12" text-anchor="middle">plugin code</text>
+  <text class="m" x="109" y="262" font-size="12" text-anchor="middle">settings copied</text>
+  <text class="m" x="109" y="278" font-size="12" text-anchor="middle">over once →</text>
+
+  <!-- muvm -->
+  <rect class="vm" x="204" y="92" width="394" height="232" rx="14" stroke-width="1.5"/>
+  <text class="t" x="222" y="116" font-size="13" font-weight="600">muvm</text>
+  <text class="m" x="266" y="116" font-size="12">4K-page micro-VM, only needed on 16K-page kernels</text>
+
+  <!-- FEX -->
+  <rect class="fex" x="222" y="130" width="358" height="178" rx="12" stroke-width="1.5"/>
+  <text class="t" x="240" y="154" font-size="13" font-weight="600">FEX-Emu</text>
+  <text class="m" x="306" y="154" font-size="12">translates x86_64 → ARM64 on the fly</text>
+
+  <!-- x86 studio -->
+  <rect class="studio" x="240" y="168" width="322" height="122" rx="10" stroke-width="2"/>
+  <text class="t" x="258" y="194" font-size="14" font-weight="700">Bambu Studio, x86_64 copy</text>
+  <text class="m" x="258" y="214" font-size="12">official AppImage + x86 libraries add-on</text>
+  <rect class="plug" x="258" y="228" width="286" height="46" rx="8"/>
+  <text class="w" x="401" y="249" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">Bambu's network plugin</text>
+  <text class="w" x="401" y="266" font-size="11" text-anchor="middle" fill="#fff" opacity="0.9">official, unmodified, from Bambu's servers</text>
+
+  <!-- arrow to printer -->
+  <path class="line" d="M562 252 H 700" stroke-width="2.5" fill="none"/>
+  <path class="ah" d="M700 244 L714 252 L700 260 Z"/>
+  <text class="m" x="636" y="240" font-size="12" text-anchor="middle">LAN / cloud</text>
+
+  <!-- printer -->
+  <rect class="printer" x="716" y="176" width="150" height="152" rx="14" stroke-width="2"/>
+  <g class="line" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <rect x="752" y="196" width="78" height="66" rx="6"/>
+    <path d="M760 214 H 822"/>
+    <path d="M791 214 V 232"/>
+  </g>
+  <path class="ah" d="M785 232 h12 l-6 8 z"/>
+  <rect class="ah" x="768" y="248" width="46" height="6" rx="2"/>
+  <text class="t" x="791" y="292" font-size="14" font-weight="700" text-anchor="middle">Bambu Lab</text>
+  <text class="t" x="791" y="310" font-size="14" font-weight="700" text-anchor="middle">printer</text>
+</svg>

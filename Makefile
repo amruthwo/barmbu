@@ -18,6 +18,7 @@ APP_ID  := io.github.amruthwo.Barmbu
 CORE    := src/barmbu.py
 GUI     := src/barmbu_gui.py
 OVERLAY := src/x86_overlay.py
+MODULES := src/deb_addon.py src/emulator_setup.py
 VERSION := $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' $(CORE))
 PY      ?= python3
 FEDORA_IMAGE ?= registry.fedoraproject.org/fedora:45
@@ -39,7 +40,7 @@ all: check
 .PHONY: check
 check:
 	@echo ">> syntax check"
-	$(PY) -I -m py_compile $(CORE) $(GUI) $(OVERLAY)
+	$(PY) -I -m py_compile $(CORE) $(GUI) $(OVERLAY) $(MODULES)
 	@echo ">> --help"
 	$(PY) -I $(CORE) --help >/dev/null
 	@echo ">> offline self-test (detect)"
@@ -64,6 +65,7 @@ install-files:
 	install -Dm0755 $(CORE)    $(LIBDIR)/barmbu.py
 	install -Dm0755 $(GUI)     $(LIBDIR)/barmbu_gui.py
 	install -Dm0644 $(OVERLAY) $(LIBDIR)/x86_overlay.py
+	for f in $(MODULES); do install -Dm0644 $$f $(LIBDIR)/$$(basename $$f); done
 	install -d $(BINDIR)
 	ln -sf ../share/$(PKGNAME)/barmbu.py $(BINDIR)/$(PKGNAME)
 	ln -sf ../share/$(PKGNAME)/barmbu_gui.py    $(BINDIR)/$(PKGNAME)-gui

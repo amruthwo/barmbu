@@ -139,12 +139,39 @@ class ErofsImage:
                         check=False, capture=True)
         return res.stdout or ""
 
+    def os_release(self) -> dict:
+        return parse_os_release(self.cat("/usr/lib/os-release")
+                                or self.cat("/etc/os-release"))
+
     def fedora_release(self) -> Optional[str]:
-        text = self.cat("/usr/lib/os-release") or self.cat("/etc/os-release")
-        if "fedora" not in text.lower():
-            return None
-        m = re.search(r'^VERSION_ID="?(\d+)', text, re.MULTILINE)
-        return m.group(1) if m else None
+        rel = self.os_release()
+        return rel.get("VERSION_ID") if rel.get("ID") == "fedora" else None
+
+
+class DirRootfs(ErofsImage):
+    """Same questions, for an unpacked root filesystem (FEXRootFSFetcher -x)."""
+
+    def __init__(self, root: Path):
+        self.image = root
+        self._cache = {}
+
+    def has(self, path: str) -> bool:
+        return os.path.lexists(self.image / path.lstrip("/"))
+
+    def cat(self, path: str) -> str:
+        try:
+            return (self.image / path.lstrip("/")).read_text()
+        except OSError:
+            return ""
+
+
+def parse_os_release(text: str) -> dict:
+    out = {}
+    for line in text.splitlines():
+        k, sep, v = line.partition("=")
+        if sep:
+            out[k.strip()] = v.strip().strip('"')
+    return out
 
 
 def missing_sonames(elf_files: Iterable[Path], bundled: set[str],
@@ -259,17 +286,8 @@ def build_overlay(missing: list[str], image: ErofsImage, out_image: Path,
         raise RuntimeError("none of the downloaded packages provide the missing "
                            f"libraries ({', '.join(missing)})")
 
-    out_image.parent.mkdir(parents=True, exist_ok=True)
-    tmp_img = out_image.with_suffix(".erofs.tmp")
     log(f"Packing {len(chosen)} package(s) into {out_image.name} ...")
-    # -b 4096: the microVM runs a 4K-page kernel, but mkfs.erofs on a
-    # 16K-page host (Asahi) would otherwise pick 16K blocks it cannot mount.
-    res = runner(["mkfs.erofs", "-b", "4096", "-zlz4hc", "--all-root",
-                  str(tmp_img), str(staging)],
-                 check=False, capture=True)
-    if res.returncode != 0:
-        raise RuntimeError("mkfs.erofs failed:\n" + (res.stderr or "").strip()[-800:])
-    os.replace(tmp_img, out_image)
+    pack_erofs(staging, out_image, runner)
     # The image is all that's needed now; the RPMs + dnf metadata are ~300 MB.
     for d in (staging, rpm_dir, root_dir):
         shutil.rmtree(d, ignore_errors=True)
@@ -282,3 +300,17 @@ def _extract_rpm(rpm: Path, dest: Path, runner) -> None:
                   "sh", str(rpm)], check=False, capture=True, cwd=str(dest))
     if res.returncode != 0:
         raise RuntimeError(f"could not unpack {rpm.name}: {(res.stderr or '').strip()}")
+
+
+def pack_erofs(staging: Path, out_image: Path, runner) -> None:
+    """Pack a staged folder into an erofs image muvm can stack."""
+    out_image.parent.mkdir(parents=True, exist_ok=True)
+    tmp_img = out_image.with_suffix(".erofs.tmp")
+    # -b 4096: the microVM runs a 4K-page kernel, but mkfs.erofs on a
+    # 16K-page host (Asahi) would otherwise pick 16K blocks it cannot mount.
+    res = runner(["mkfs.erofs", "-b", "4096", "-zlz4hc", "--all-root",
+                  str(tmp_img), str(staging)],
+                 check=False, capture=True)
+    if res.returncode != 0:
+        raise RuntimeError("mkfs.erofs failed:\n" + (res.stderr or "").strip()[-800:])
+    os.replace(tmp_img, out_image)

@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import barmbu as m  # noqa: E402
 import x86_overlay as xo  # noqa: E402
+import deb_addon as da  # noqa: E402
+import emulator_setup as es  # noqa: E402
 
 
 def fake_elf(path: Path, e_machine: int = 0x3E) -> Path:
@@ -209,7 +211,9 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("GDK_BACKEND=x11", cmd)
 
     def test_plain_fex_on_4k_pages(self):
-        cmd = m.launch_command(self._emu(4096), Path("/x/AppRun"), None)
+        e = self._emu(4096)
+        e.muvm = None                  # no muvm: FEX runs directly
+        cmd = m.launch_command(e, Path("/x/AppRun"), None)
         self.assertIn("FEXBash", cmd)
         self.assertNotIn("muvm", cmd)
 
@@ -219,6 +223,120 @@ class LauncherTests(unittest.TestCase):
         e.muvm = None
         self.assertFalse(e.ready)
         self.assertIn("muvm", e.problem())
+
+
+    def test_pi_16k_problem_mentions_kernel(self):
+        e = self._emu(16384)
+        e.muvm, e.pi_model = None, "Raspberry Pi 5 Model B Rev 1.0"
+        self.assertIn("16K-page kernel", e.problem())
+        self.assertEqual(m.emulator_fix(e), "barmbu pi-4k-kernel   (then restart)")
+        e.pi_4k_pending = True
+        self.assertEqual(m.emulator_fix(e), "restart your Pi")
+
+    def test_ca_env_follows_rootfs(self):
+        class Fake:
+            def __init__(self, paths): self.paths = paths
+            def has(self, p): return p in self.paths
+        fedora = "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+        self.assertEqual(m.ca_env(Fake({fedora}))["SSL_CERT_FILE"] in
+                         (fedora, "/etc/ssl/certs/ca-certificates.crt"), True)
+        env = m.ca_env(Fake({"/etc/ssl/certs/ca-certificates.crt"}))
+        self.assertEqual(env["SSL_CERT_FILE"], "/etc/ssl/certs/ca-certificates.crt")
+
+
+class EmulatorSetupTests(unittest.TestCase):
+    def test_distro_family(self):
+        f = es.distro_family
+        self.assertEqual(f({"ID": "fedora"}), "fedora")
+        self.assertEqual(f({"ID": "fedora-asahi-remix", "ID_LIKE": "fedora"}), "fedora")
+        self.assertEqual(f({"ID": "ubuntu", "ID_LIKE": "debian"}), "ubuntu")
+        self.assertEqual(f({"ID": "debian"}), "debian")
+        self.assertEqual(f({"ID": "raspbian", "ID_LIKE": "debian"}), "debian")
+        self.assertEqual(f({"ID": "arch"}), "arch")
+        self.assertEqual(f({"ID": "opensuse-tumbleweed", "ID_LIKE": "opensuse suse"}), "suse")
+
+    def test_cpu_level(self):
+        pi5 = "Features : fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp"
+        self.assertEqual(es.fex_ppa_package(es.cpu_features(pi5)), "fex-emu-armv8.2")
+        self.assertEqual(es.fex_ppa_package({"fp", "asimd"}), "fex-emu-armv8.0")
+        m1 = set(pi5.split(":")[1].split()) | {"uscat", "ilrcpc", "flagm"}
+        self.assertEqual(es.fex_ppa_package(m1), "fex-emu-armv8.4")
+
+    def test_install_plans(self):
+        fed = es.install_plan("fedora", True, True, False)
+        self.assertTrue(fed["auto"])
+        self.assertIn("muvm", fed["script"])
+        ub = es.install_plan("ubuntu", False, False, True, features={"fp"})
+        self.assertIn("ppa:fex-emu/fex", ub["script"])
+        self.assertIn("fex-emu-armv8.0", ub["script"])
+        deb = es.install_plan("debian", False, False, True, ppa_key="/k.asc", features={"fp"})
+        self.assertTrue(deb["experimental"])
+        self.assertIn("noble main", deb["script"])
+        self.assertFalse(es.install_plan("arch", False, False, False)["auto"])
+
+    def test_pi_kernel_script(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "config.txt"
+            cfg.write_text("[pi4]\narm_boost=1\n")
+            (Path(d) / "kernel8.img").write_bytes(b"")
+            old = es.PI_CONFIG_CANDIDATES
+            es.PI_CONFIG_CANDIDATES = (cfg,)
+            try:
+                import subprocess
+                subprocess.run(["sh", "-c", es.pi_kernel_script()], check=True)
+                text = cfg.read_text()
+                self.assertTrue(text.endswith("[all]\nkernel=kernel8.img\n"))
+                subprocess.run(["sh", "-c", es.pi_kernel_script()], check=True)
+                self.assertEqual(cfg.read_text().count("kernel=kernel8.img"), 1)
+                subprocess.run(["sh", "-c", es.pi_kernel_script(undo=True)], check=True)
+                self.assertNotIn("kernel8", cfg.read_text())
+            finally:
+                es.PI_CONFIG_CANDIDATES = old
+
+
+class DebAddonTests(unittest.TestCase):
+    def test_soname_guesses(self):
+        g = da.soname_package_guesses
+        self.assertEqual(g("libwebkit2gtk-4.1.so.0")[0], "libwebkit2gtk-4.1-0")
+        self.assertEqual(g("libwayland-server.so.0")[0], "libwayland-server0")
+        self.assertEqual(g("not-a-lib"), [])
+
+    def test_parse_packages_and_deps(self):
+        idx = da.parse_packages("Package: a\nVersion: 1\nDepends: b (>= 2), c | d\n\n"
+                                "Package: b\nDescription: x\n more\n")
+        self.assertEqual(idx["a"]["Version"], "1")
+        self.assertEqual(da.dep_names(idx["a"]["Depends"]), ["b", "c", "d"])
+        self.assertIn("more", idx["b"]["Description"])
+
+    def test_extract_deb(self):
+        import io as _io, tarfile as _tf, gzip as _gz
+        buf = _io.BytesIO()
+        with _tf.open(fileobj=buf, mode="w") as tf:
+            data = b"\x7fELF"
+            ti = _tf.TarInfo("./usr/lib/x86_64-linux-gnu/libz.so.1")
+            ti.size = len(data)
+            tf.addfile(ti, _io.BytesIO(data))
+        member = _gz.compress(buf.getvalue())
+        def ar(name, blob):
+            hdr = f"{name:<16}{0:<12}{0:<6}{0:<6}{644:<8}{len(blob):<10}`\n".encode()
+            return hdr + blob + (b"\n" if len(blob) % 2 else b"")
+        deb = b"!<arch>\n" + ar("debian-binary", b"2.0\n") + ar("data.tar.gz", member)
+        with tempfile.TemporaryDirectory() as d:
+            files = da.extract_deb(deb, Path(d))
+            self.assertEqual(files, ["/usr/lib/x86_64-linux-gnu/libz.so.1"])
+            self.assertTrue((Path(d) / "usr/lib/x86_64-linux-gnu/libz.so.1").is_file())
+
+    def test_merge_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as d:
+            st, root = Path(d) / "st", Path(d) / "root"
+            (st / "usr/lib").mkdir(parents=True)
+            (root / "usr/lib").mkdir(parents=True)
+            (st / "usr/lib/new.so").write_text("new")
+            (st / "usr/lib/old.so").write_text("new")
+            (root / "usr/lib/old.so").write_text("old")
+            added = da.merge_into_dir(st, root)
+            self.assertEqual([Path(a).name for a in added], ["new.so"])
+            self.assertEqual((root / "usr/lib/old.so").read_text(), "old")
 
 
 class CliTests(unittest.TestCase):

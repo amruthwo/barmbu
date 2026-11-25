@@ -55,8 +55,10 @@ from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import x86_overlay  # noqa: E402
+import deb_addon  # noqa: E402
+import emulator_setup as es  # noqa: E402
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # --------------------------------------------------------------------------- #
 #  Constants -- Bambu's real endpoints, from the public BambuStudio source
@@ -83,23 +85,36 @@ USER_AGENT = f"barmbu/{__version__} (+interoperability tool)"
 FALLBACK_STUDIO_VERSION = "02.09.02.00"
 FLATPAK_APP_ID = "com.bambulab.BambuStudio"
 
-# Asahi / Fedora package names for the emulator.
-EMULATOR_PACKAGES = ("fex-emu", "muvm", "fex-emu-rootfs-fedora")
 
 SYSTEM_FEX_ROOTFS_DIR = Path("/usr/share/fex-emu/RootFS")
 SYSTEM_FEX_OVERLAY_DIR = Path("/usr/share/fex-emu/overlays")
 
 # Environment for the emulated Studio.
-#  * certificates: the AppImage is built on Ubuntu; point it at Fedora's bundle
 #  * GDK_BACKEND=x11: muvm forwards X11 windows
 #  * WEBKIT_DISABLE_DMABUF_RENDERER: avoids blank web pages on virtual GPUs
-STUDIO_ENV = {
-    "SSL_CERT_FILE": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-    "SSL_CERT_DIR": "/etc/pki/tls/certs",
-    "CURL_CA_BUNDLE": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-    "GDK_BACKEND": "x11",
-    "WEBKIT_DISABLE_DMABUF_RENDERER": "1",
-}
+STUDIO_ENV = {"GDK_BACKEND": "x11", "WEBKIT_DISABLE_DMABUF_RENDERER": "1"}
+
+# (bundle, cert dir) per distro family.  The AppImage is built on Ubuntu and
+# looks in Ubuntu's place; other root filesystems keep them elsewhere.
+CA_BUNDLES = (
+    ("/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/certs"),                 # Debian/Ubuntu/Arch
+    ("/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", "/etc/pki/tls/certs"),  # Fedora
+    ("/etc/ssl/ca-bundle.pem", "/etc/ssl/certs"),                             # openSUSE
+)
+
+
+def ca_env(rootfs) -> dict:
+    """SSL variables pointing at a certificate bundle the emulated Studio can see.
+
+    FEX's root filesystem usually has a near-empty /etc: paths it lacks fall
+    through to the host's own files.  So look in the rootfs first, then on
+    the host (a Fedora host keeps its bundle where the Ubuntu-built Studio
+    doesn't look)."""
+    for bundle, cert_dir in CA_BUNDLES:
+        if (rootfs is not None and rootfs.has(bundle)) or Path(bundle).is_file():
+            return {"SSL_CERT_FILE": bundle, "SSL_CERT_DIR": cert_dir,
+                    "CURL_CA_BUNDLE": bundle}
+    return {}
 
 
 # --------------------------------------------------------------------------- #
@@ -399,17 +414,29 @@ class Emulator:
     fex: Optional[str]
     muvm: Optional[str]
     page_size: int
-    base_image: Optional[str]
+    base_image: Optional[str]      # system erofs image (Fedora's fex-emu-rootfs-fedora)
     system_overlays: list
-    user_rootfs: Optional[str]
+    user_rootfs: Optional[str]     # FEX's own RootFS (e.g. from FEXRootFSFetcher)
+    distro: str = "other"
+    pi_model: Optional[str] = None
+    pi_4k_pending: bool = False    # 4K kernel configured; needs a restart
 
     @property
     def needs_muvm(self) -> bool:
         return self.page_size != 4096
 
     @property
+    def use_muvm(self) -> bool:
+        """muvm on 16K pages, and also on 4K hosts that have it plus a system
+        image and KVM (it's the path that can stack the library add-on)."""
+        return self.needs_muvm or bool(self.muvm and self.base_image
+                                       and Path("/dev/kvm").exists())
+
+    @property
     def has_rootfs(self) -> bool:
-        return bool(self.base_image or self.user_rootfs)
+        if self.use_muvm:
+            return bool(self.base_image)
+        return bool(self.user_rootfs or self.base_image)
 
     @property
     def ready(self) -> bool:
@@ -418,55 +445,81 @@ class Emulator:
         return bool(self.muvm) if self.needs_muvm else True
 
     def problem(self) -> Optional[str]:
+        if self.needs_muvm and not self.muvm and self.pi_model:
+            return ("This Raspberry Pi is running a 16K-page kernel, and FEX needs "
+                    "4K pages" + (". Restart to finish switching to the 4K kernel"
+                                  if self.pi_4k_pending else ""))
         missing = []
         if not self.fex:
             missing.append("FEX-Emu")
         if self.needs_muvm and not self.muvm:
-            missing.append("muvm")
+            missing.append("muvm (this kernel uses 16K memory pages)")
         if not self.has_rootfs:
-            missing.append("the x86_64 root filesystem")
+            missing.append("an x86_64 root filesystem")
         if not missing:
             return None
         return "Missing: " + ", ".join(missing)
 
 
 def emulator_status() -> Emulator:
-    base = None
     images = host_glob(SYSTEM_FEX_ROOTFS_DIR, "*.erofs")
-    for img in images:
-        if img.name == "default.erofs":
-            base = img
-    if base is None and images:
-        base = images[0]
-    user_rootfs = None
-    urd = home() / ".fex-emu/RootFS"
-    if urd.is_dir():
-        entries = sorted(urd.iterdir())
-        if entries:
-            user_rootfs = str(entries[0])
+    base = next((i for i in images if i.name == "default.erofs"),
+                images[0] if images else None)
+    user = es.fex_configured_rootfs()
+    pi = es.raspberry_pi_model()
     return Emulator(
         fex=which("FEXBash") or which("FEXInterpreter"),
         muvm=which("muvm"),
         page_size=page_size(),
         base_image=str(base) if base else None,
         system_overlays=[str(p) for p in host_glob(SYSTEM_FEX_OVERLAY_DIR, "*.erofs")],
-        user_rootfs=user_rootfs,
+        user_rootfs=str(user) if user else None,
+        distro=es.distro_family(),
+        pi_model=pi,
+        pi_4k_pending=bool(pi) and page_size() != 4096 and es.pi_4k_kernel_configured(),
     )
 
 
-def emulator_install_command() -> list[str]:
-    if which("dnf"):
-        return ["dnf", "install", "-y", *EMULATOR_PACKAGES]
-    if which("apt-get"):
-        return ["apt-get", "install", "-y", "fex-emu"]
-    if which("pacman"):
-        return ["pacman", "-S", "--noconfirm", "fex-emu"]
-    return []
+PPA_KEY = CACHE_DIR / "fex-emu-ppa.asc"
 
 
-def emulator_install_hint() -> str:
-    cmd = emulator_install_command()
-    return ("sudo " + " ".join(cmd)) if cmd else "Install FEX-Emu: https://fex-emu.com/"
+def emulator_plan(emu: Emulator) -> dict:
+    return es.install_plan(emu.distro, emu.needs_muvm, bool(which("dnf")),
+                           bool(which("apt-get")), ppa_key=str(PPA_KEY))
+
+
+def emulator_fix(emu: Emulator) -> Optional[str]:
+    """One line telling the person (or the GUI) what fixes the emulator."""
+    if emu.ready:
+        return None
+    if emu.needs_muvm and not emu.muvm and emu.pi_model:
+        return ("restart your Pi" if emu.pi_4k_pending
+                else "barmbu pi-4k-kernel   (then restart)")
+    if emu.needs_muvm and not emu.muvm and emu.distro != "fedora":
+        return ("muvm isn't available for this distro; boot a 4K-page kernel, "
+                "or use Fedora Asahi Remix")
+    plan = emulator_plan(emu)
+    if plan["auto"] or emu.fex:
+        return "barmbu setup-emulator"
+    return plan["manual"]
+
+
+def fetch_ppa_key() -> Path:
+    """FEX's Launchpad PPA signing key, for adding the PPA on Debian."""
+    meta = json.loads(http_get(es.PPA_LAUNCHPAD_API, timeout=30))
+    fp = meta["signing_key_fingerprint"]
+    key = http_get("https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr"
+                   f"&search=0x{fp}", timeout=30)
+    if b"BEGIN PGP PUBLIC KEY BLOCK" not in key:
+        raise ToolError("Couldn't download the FEX package signing key")
+    PPA_KEY.parent.mkdir(parents=True, exist_ok=True)
+    PPA_KEY.write_bytes(key)
+    return PPA_KEY
+
+
+def run_as_root(script: str) -> int:
+    cmd = ["sh", "-c", script] if os.geteuid() == 0 else ["pkexec", "sh", "-c", script]
+    return run(cmd, check=False).returncode
 
 
 # --------------------------------------------------------------------------- #
@@ -818,9 +871,11 @@ def copy_flatpak_settings() -> bool:
     return True
 
 
-def launch_command(emu: Emulator, apprun: Path, overlay: Optional[Path]) -> list[str]:
+def launch_command(emu: Emulator, apprun: Path, overlay: Optional[Path],
+                   env: Optional[dict] = None) -> list[str]:
     """The command that starts the x86_64 Studio."""
-    if emu.needs_muvm:
+    env = STUDIO_ENV if env is None else env
+    if emu.use_muvm:
         cmd = ["muvm"]
         if overlay and emu.base_image:
             # Passing -f replaces muvm's defaults, so list base + overlays.
@@ -828,11 +883,11 @@ def launch_command(emu: Emulator, apprun: Path, overlay: Optional[Path]) -> list
             for o in emu.system_overlays:
                 cmd += ["-f", o]
             cmd += ["-f", str(overlay)]
-        for k, v in STUDIO_ENV.items():
+        for k, v in env.items():
             cmd += ["-e", f"{k}={v}"]
         return cmd + ["--", str(apprun)]
-    env = [f"{k}={v}" for k, v in STUDIO_ENV.items()]
-    return ["env", *env, "FEXBash", "-c", 'exec "$0" "$@"', str(apprun)]
+    pairs = [f"{k}={v}" for k, v in env.items()]
+    return ["env", *pairs, "FEXBash", "-c", 'exec "$0" "$@"', str(apprun)]
 
 
 def write_launcher(cmd: list[str]) -> Path:
@@ -886,15 +941,17 @@ def status_dict() -> dict:
         "studios": [asdict(i) | {"can_load_x86_plugin": i.can_load_x86_plugin}
                     for i in installs],
         "emulator": (asdict(emu) | {"ready": emu.ready, "needs_muvm": emu.needs_muvm,
-                                    "problem": emu.problem(),
-                                    "install_command": emulator_install_command()})
+                                    "use_muvm": emu.use_muvm,
+                                    "problem": emu.problem(), "fix": emulator_fix(emu),
+                                    "can_auto_install": emulator_plan(emu)["auto"]})
                     if emu else None,
         "x86_studio": {"appimage": state.get("appimage") or
                        (managed[0].location if managed else None),
                        "version": state.get("studio_version") or
                        (managed[0].version if managed else None),
                        "extracted": bool(apprun and apprun.is_file())},
-        "libs_overlay": {"path": str(OVERLAY_IMAGE) if OVERLAY_IMAGE.is_file() else None,
+        "libs_overlay": {"path": str(OVERLAY_IMAGE) if OVERLAY_IMAGE.is_file() else
+                         (emu.user_rootfs if emu and state.get("addon_files") else None),
                          "packages": state.get("overlay_packages", []),
                          "needed": state.get("overlay_needed")},
         "plugin": {"dir": str(X86_PLUGIN_DIR), "files": plugin_files,
@@ -927,7 +984,7 @@ def cmd_detect(args) -> int:
             print(f"    muvm      : {e['muvm'] or 'not installed'} (needed: 16K pages)")
         print(f"    x86 rootfs: {e['base_image'] or e['user_rootfs'] or 'missing'}")
         if e["problem"]:
-            print(f"    {e['problem']} -> {emulator_install_hint()}")
+            print(f"    {e['problem']}\n    Fix: {e['fix']}")
     p = s["plugin"]
     print(f"\nNetwork plugin: {', '.join(p['files']) or 'not installed'}")
     print(f"Ready: {'yes' if s['ready'] else 'no'}")
@@ -953,12 +1010,58 @@ def cmd_download(args) -> int:
     return 0
 
 
+def open_rootfs(emu: Emulator):
+    """The x86 root filesystem Studio will run in, as something we can query."""
+    if emu.use_muvm or not emu.user_rootfs:
+        if emu.base_image and which("dump.erofs"):
+            return x86_overlay.ErofsImage(Path(emu.base_image), run)
+        return None
+    rf = Path(emu.user_rootfs)
+    return x86_overlay.DirRootfs(rf) if rf.is_dir() else None
+
+
+def build_library_addon(missing: list[str], rootfs, emu: Emulator,
+                        state: dict) -> Optional[Path]:
+    """Fedora rootfs + dnf: RPM overlay.  Ubuntu rootfs: .deb add-on (any host).
+
+    Under muvm the result is an erofs image stacked at launch; with plain FEX
+    it is copied into the unpacked root filesystem."""
+    rel = rootfs.os_release()
+    rid = rel.get("ID", "")
+    work = CACHE_DIR / "addon"
+    if rid == "fedora" and emu.use_muvm and which("dnf"):
+        report = x86_overlay.build_overlay(
+            missing, rootfs, OVERLAY_IMAGE, CACHE_DIR / "overlay", run, info)
+    elif rid == "ubuntu" or "ubuntu" in rel.get("ID_LIKE", ""):
+        info(f"Getting x86_64 Ubuntu {rel.get('VERSION_ID', '')} packages for: "
+             + ", ".join(missing))
+        report = deb_addon.build_addon(
+            missing, rootfs, rel.get("VERSION_CODENAME") or "noble",
+            work / "staging", work, lambda u: http_get(u, timeout=180), info)
+        if emu.use_muvm:
+            x86_overlay.pack_erofs(work / "staging", OVERLAY_IMAGE, run)
+        else:
+            state["addon_files"] = (state.get("addon_files", []) +
+                                    deb_addon.merge_into_dir(work / "staging",
+                                                             Path(rootfs.image)))
+        shutil.rmtree(work, ignore_errors=True)
+    else:
+        warn(f"Can't add libraries to a {rel.get('PRETTY_NAME', 'unknown')} root "
+             "filesystem automatically. Missing: " + ", ".join(missing))
+        return None
+    if report["unresolved"]:
+        warn("Still missing: " + ", ".join(report["unresolved"]))
+    state.update(overlay_packages=report["packages"], overlay_for=missing)
+    ok(f"Added {len(report['packages'])} package(s) of libraries")
+    return OVERLAY_IMAGE if emu.use_muvm else None
+
+
 def _install_arm64(args, state: dict) -> None:
     total = 6
     step(1, total, "Checking the x86 emulator")
     emu = emulator_status()
     if not emu.ready:
-        raise ToolError(f"{emu.problem()}. Install it with:\n    {emulator_install_hint()}")
+        raise ToolError(f"{emu.problem()}.\n    Fix: {emulator_fix(emu)}")
     ok("FEX" + (" + muvm" if emu.needs_muvm else "") + " ready")
 
     step(2, total, "Getting the x86_64 Bambu Studio")
@@ -975,28 +1078,21 @@ def _install_arm64(args, state: dict) -> None:
 
     step(3, total, "Adding the libraries Bambu Studio needs")
     overlay: Optional[Path] = None
-    if emu.base_image and which("dump.erofs"):
-        image = x86_overlay.ErofsImage(Path(emu.base_image), run)
+    rootfs = open_rootfs(emu)
+    if rootfs is None:
+        warn("Can't look inside the x86 root filesystem; skipping the library check")
+    else:
         files, bundled = studio_elf_files(apprun)
-        missing = x86_overlay.missing_sonames(files, bundled, image)
+        missing = x86_overlay.missing_sonames(files, bundled, rootfs)
         state["overlay_needed"] = missing
         if not missing:
             ok("Nothing missing")
-            OVERLAY_IMAGE.unlink(missing_ok=True)
-        elif (OVERLAY_IMAGE.is_file() and not args.rebuild_libs
+        elif (emu.use_muvm and OVERLAY_IMAGE.is_file() and not args.rebuild_libs
               and state.get("overlay_for") == missing):
             ok("Library add-on already built")
             overlay = OVERLAY_IMAGE
         else:
-            report = x86_overlay.build_overlay(
-                missing, image, OVERLAY_IMAGE, CACHE_DIR / "overlay", run, info)
-            if report["unresolved"]:
-                warn("Still missing: " + ", ".join(report["unresolved"]))
-            state.update(overlay_packages=report["packages"], overlay_for=missing)
-            ok(f"Built library add-on ({len(report['packages'])} packages)")
-            overlay = OVERLAY_IMAGE
-    else:
-        warn("Can't inspect the x86 root filesystem (needs dump.erofs); skipping")
+            overlay = build_library_addon(missing, rootfs, emu, state)
 
     step(4, total, "Bringing over your settings")
     if not copy_flatpak_settings():
@@ -1012,7 +1108,8 @@ def _install_arm64(args, state: dict) -> None:
     state["plugin_version"] = plugin_query_version(version)
 
     step(6, total, "Creating the app-menu shortcut")
-    write_launcher(launch_command(emu, apprun, overlay))
+    env = STUDIO_ENV | ca_env(rootfs)
+    write_launcher(launch_command(emu, apprun, overlay, env))
     write_desktop_entry(apprun)
     state.update(launcher=str(LAUNCHER), desktop=str(DESKTOP_FILE))
     ok("Added 'Bambu Studio (x86, with network plugin)' to your app menu")
@@ -1086,6 +1183,61 @@ def cmd_self_update(args) -> int:
     return 0
 
 
+def cmd_setup_emulator(args) -> int:
+    total = 3
+    emu = emulator_status()
+    step(1, total, "Installing FEX-Emu")
+    if emu.fex and (emu.muvm or not emu.needs_muvm or emu.distro != "fedora"):
+        ok(f"FEX-Emu is installed ({emu.fex})")
+    else:
+        plan = emulator_plan(emu)
+        if not plan["auto"]:
+            raise ToolError(plan["manual"])
+        if plan.get("experimental"):
+            warn("Your distro has no FEX packages; using FEX's Ubuntu 24.04 build. "
+                 "This is experimental.")
+            fetch_ppa_key()
+        info(plan["summary"] + " (asks for your password)")
+        if run_as_root(plan["script"]) != 0:
+            raise ToolError("Installing FEX-Emu didn't finish (see the messages above)")
+        ok("FEX-Emu installed")
+
+    step(2, total, "Getting an x86_64 root filesystem")
+    emu = emulator_status()
+    if emu.has_rootfs:
+        ok("Root filesystem ready: " + str(emu.base_image if emu.use_muvm
+                                           else emu.user_rootfs or emu.base_image))
+    else:
+        if not which("FEXRootFSFetcher"):
+            raise ToolError("FEXRootFSFetcher is missing; is FEX-Emu installed?")
+        info("Downloading Ubuntu 24.04 for x86_64 from FEX's servers (about 1 GB)")
+        if run(es.rootfs_fetch_command(), check=False).returncode != 0:
+            raise ToolError("FEXRootFSFetcher failed (see the messages above)")
+        ok("Root filesystem ready")
+
+    step(3, total, "Checking the memory page size")
+    emu = emulator_status()
+    if emu.ready:
+        ok("All set" + (" (FEX runs inside muvm)" if emu.use_muvm else ""))
+    else:
+        warn(f"{emu.problem()}. Fix: {emulator_fix(emu)}")
+    return 0
+
+
+def cmd_pi_kernel(args) -> int:
+    if not es.raspberry_pi_model():
+        raise ToolError("This isn't a Raspberry Pi")
+    script = es.pi_kernel_script(undo=args.undo)
+    if script is None:
+        raise ToolError("Couldn't find config.txt next to kernel8.img in /boot")
+    if run_as_root(script) != 0:
+        raise ToolError("Changing config.txt didn't finish")
+    ok(("Back to the default kernel" if args.undo else
+        "The 4K-page kernel is selected (a backup of config.txt was saved)")
+       + ". Restart your Pi to use it.")
+    return 0
+
+
 def cmd_launch(args) -> int:
     if not LAUNCHER.is_file():
         raise ToolError("Not set up yet - run install first")
@@ -1106,6 +1258,8 @@ def cmd_uninstall(args) -> int:
         shutil.rmtree(STUDIO_DIR, ignore_errors=True)
         OVERLAY_IMAGE.unlink(missing_ok=True)
         shutil.rmtree(CACHE_DIR, ignore_errors=True)
+        for f in reversed(state.get("addon_files", [])):
+            Path(f).unlink(missing_ok=True)
         ok("Removed the x86 Bambu Studio copy, library add-on and downloads")
     info(f"Your Bambu Studio settings in {X86_CONFIG_DIR} were left alone.")
     return 0
@@ -1160,6 +1314,15 @@ def build_parser() -> argparse.ArgumentParser:
                         help="download and install the newest version of this tool")
     sp.add_argument("--download-only", action="store_true")
     sp.set_defaults(func=cmd_self_update)
+
+    sp = sub.add_parser("setup-emulator",
+                        help="install FEX-Emu and an x86_64 root filesystem")
+    sp.set_defaults(func=cmd_setup_emulator)
+
+    sp = sub.add_parser("pi-4k-kernel",
+                        help="Raspberry Pi 5: boot the 4K-page kernel FEX needs")
+    sp.add_argument("--undo", action="store_true", help="go back to the default kernel")
+    sp.set_defaults(func=cmd_pi_kernel)
 
     sp = sub.add_parser("launch", help="start the emulated Bambu Studio")
     sp.set_defaults(func=cmd_launch)

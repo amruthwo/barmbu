@@ -18,9 +18,19 @@
   <developer id="io.github.amruthwo">
     <name>barmbu contributors</name>
   </developer>
+  <url type="bugtracker">https://github.com/amruthwo/barmbu/issues</url>
   <url type="homepage">https://github.com/amruthwo/barmbu</url>
   <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/amruthwo/barmbu/main/docs/images/app-light.png</image>
+      <caption>Everything set up and ready to open Bambu Studio</caption>
+    </screenshot>
+  </screenshots>
   <releases>
+    <release version="0.2.0" date="2026-11-25">
+      <description><p>Works on more ARM64 computers: automatic FEX set-up on Fedora, Ubuntu and (experimentally) Debian / Raspberry Pi OS; one-click 4K-page kernel switch on Raspberry Pi 5; library add-on from Ubuntu packages on any distro; certificate paths that follow the system.</p></description>
+    </release>
     <release version="0.1.0" date="2026-11-25">
       <description><p>First public release.</p></description>
     </release>

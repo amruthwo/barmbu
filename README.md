@@ -1,15 +1,35 @@
-# B***ARM***bu Studio Helper
+<p align="center">
+  <img src="data/icons/hicolor/scalable/apps/io.github.amruthwo.Barmbu.svg" width="112" alt="">
+</p>
 
-[![CI](https://github.com/amruthwo/barmbu/actions/workflows/ci.yml/badge.svg)](https://github.com/amruthwo/barmbu/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/amruthwo/barmbu)](https://github.com/amruthwo/barmbu/releases/latest)
+<h1 align="center">B<b><i>ARM</i></b>bu Studio Helper</h1>
+
+<p align="center">
+  <b>Use your Bambu Lab printer from an ARM64 Linux computer.</b><br>
+  Apple Silicon with Asahi Linux, Raspberry Pi 5, Snapdragon and other ARM boards.
+</p>
+
+<p align="center">
+  <a href="https://github.com/amruthwo/barmbu/actions/workflows/ci.yml"><img src="https://github.com/amruthwo/barmbu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/amruthwo/barmbu/releases/latest"><img src="https://img.shields.io/github/v/release/amruthwo/barmbu" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/amruthwo/barmbu" alt="License"></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/app-dark.png">
+    <img src="docs/images/app-light.png" width="460" alt="The bARMbu Studio Helper window: a checklist showing Bambu Studio, the x86 emulator, the x86 copy, extra libraries and the network plugin all ready">
+  </picture>
+</p>
 
 > Unofficial community tool. Not affiliated with or endorsed by Bambu Lab.
 > It downloads Bambu's own software from Bambu's servers at set-up time; no
 > Bambu files are included in this repository.
 
-**Get Bambu Lab's network plugin working on 64-bit ARM Linux**, for example an
-Apple Silicon MacBook running Asahi / Fedora. Open the app, press **Set Up**,
-then open Bambu Studio from your app menu.
+Bambu Studio's printer features (sending prints, the camera, the device
+tab) live in a closed-source network plugin that Bambu only builds for x86
+PCs. bARMbu Studio Helper runs Bambu's real plugin on ARM. Open the app,
+press **Set Up**, then open Bambu Studio from your app menu.
 
 ---
 
@@ -24,11 +44,15 @@ inside it, and x86 machine code can't be "patched" into ARM code.
 So on ARM the app sets up a **separate x86_64 copy of Bambu Studio** that runs
 under emulation, with the real plugin inside it:
 
+<p align="center">
+  <img src="docs/images/how-it-works.svg" width="100%" alt="Diagram: on your ARM64 computer, your own Bambu Studio is left untouched. Next to it, inside muvm (only on 16K-page kernels) and FEX-Emu, an x86_64 copy of Bambu Studio runs Bambu's network plugin, which talks to the Bambu Lab printer over LAN or cloud.">
+</p>
+
 | Piece | What it is | Size |
 |---|---|---|
-| FEX-Emu + muvm | Asahi's x86 emulator. On Apple Silicon (16K memory pages) FEX runs inside muvm, a tiny 4K-page virtual machine. | from your distro |
+| FEX-Emu (+ muvm) | The x86 emulator. On 16K-page kernels (Apple Silicon) FEX runs inside muvm, a tiny 4K-page virtual machine. | from your distro, set up by the app |
 | Bambu Studio, x86 copy | Bambu Lab's official Linux AppImage, unpacked. A full second Studio. | ~180 MB download |
-| Extra x86 libraries | WebKitGTK and friends from **Fedora's own x86_64 packages**, packed into an add-on image for the emulator. | ~90 MB |
+| Extra x86 libraries | WebKitGTK and friends, from **Fedora's or Ubuntu's own x86_64 packages** (matching the emulator's root filesystem), checksum-verified. | ~90 MB |
 | Network plugin | Downloaded from Bambu Lab's server, the same file Studio fetches. | ~25 MB |
 
 Your existing Bambu Studio is not changed. The first time, your printers,
@@ -55,8 +79,37 @@ flatpak install --user barmbu-*.flatpak        # any distro (aarch64)
 Then open **bARMbu Studio Helper** from your app menu.
 
 If the emulator isn't installed yet, the app shows an **Install** button
-(it asks for your password). On Asahi that installs `fex-emu`, `muvm` and
-`fex-emu-rootfs-fedora`.
+(it asks for your password). See [Supported systems](#supported-systems) for
+what that does on your distro.
+
+---
+
+## Supported systems
+
+| System | Emulator setup | Status |
+|---|---|---|
+| **Fedora Asahi Remix** (Apple Silicon) | `dnf`: FEX, muvm, Fedora x86 root filesystem | ✅ tested (M1 MacBook Air) |
+| **Fedora** on other ARM64 | same as above | should work, untested |
+| **Ubuntu** 22.04+ | FEX's official PPA, CPU-matched build, Ubuntu 24.04 root filesystem | should work, untested |
+| **Raspberry Pi OS / Debian** 13+ | FEX's Ubuntu 24.04 build plus the 4K kernel switch on a Pi 5 | 🧪 experimental |
+| Arch, openSUSE, others | the app tells you what to install | manual |
+
+**16K vs 4K memory pages.** FEX needs a kernel with 4K memory pages. Some
+ARM kernels use 16K pages: Apple Silicon (Asahi) and the Raspberry Pi 5's
+default kernel.
+
+* **Apple Silicon:** the app uses **muvm**, a tiny 4K-page virtual machine
+  that Asahi ships. Nothing to do.
+* **Raspberry Pi 5:** Raspberry Pi OS already includes a 4K-page kernel. The
+  app shows a **Switch** button (or run `barmbu pi-4k-kernel`), which adds
+  `kernel=kernel8.img` to `/boot/firmware/config.txt` and keeps a backup.
+  Restart, and you're set. `barmbu pi-4k-kernel --undo` switches back.
+* **Other 16K kernels:** install muvm if your distro has it, or boot a 4K
+  kernel.
+
+Reports from other machines are very welcome: please
+[open an issue](https://github.com/amruthwo/barmbu/issues) with the output of
+`barmbu detect`.
 
 ---
 
@@ -80,6 +133,8 @@ the same things:
 
 ```bash
 barmbu detect                     # what's on this computer
+barmbu setup-emulator             # install FEX (+ muvm) and an x86 root filesystem
+barmbu pi-4k-kernel [--undo]      # Raspberry Pi 5: use the 4K-page kernel
 barmbu install --download-studio  # set everything up
 barmbu install --update           # newest Studio + plugin
 barmbu launch                     # start the x86 Studio
@@ -126,7 +181,7 @@ release, bump `__version__` in `src/barmbu.py` (and the
 `<releases>` entry in the metainfo), then:
 
 ```bash
-git tag v2.1.0 && git push origin v2.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 CI builds the .deb, .rpm, tarball and aarch64 Flatpak and attaches them to a
@@ -136,8 +191,10 @@ file, verifies its SHA-256 against GitHub's published digest, and installs it
 (rpm/deb ask for your password). Source installs get a link instead.
 Set `BARMBU_NO_UPDATE_CHECK=1` to turn the check off.
 
-Source layout: `src/barmbu.py` (the tool), `src/x86_overlay.py`
-(the library add-on builder), `src/barmbu_gui.py` (the window), `data/`
+Source layout: `src/barmbu.py` (the tool), `src/emulator_setup.py`
+(installing FEX per distro), `src/x86_overlay.py` (library add-on from Fedora
+RPMs, via dnf), `src/deb_addon.py` (library add-on from Ubuntu .debs, pure
+Python), `src/barmbu_gui.py` (the window), `data/`
 (menu entry, icon, app-store description), `packaging/` (deb/rpm/flatpak),
 `tests/`.
 
@@ -156,9 +213,10 @@ Not yet checked: how smooth the 3D view is under emulation, and actually
 connecting to and printing on a printer. If the 3D view misbehaves, that's
 the emulator's graphics path, not the plugin.
 
-The automatic library add-on needs a Fedora-based emulator root filesystem
-and `dnf` (true on Asahi). On other distros, install the x86_64 WebKitGTK 4.1
-libraries into your FEX root filesystem yourself.
+The library add-on is built from Fedora packages (with `dnf`) when the
+emulator uses Fedora's root filesystem, and from Ubuntu packages (pure Python,
+any distro) when it uses Ubuntu's. Ubuntu's archive and package download path
+is tested; the full Ubuntu and Raspberry Pi set-ups are not yet.
 
 ---
 
