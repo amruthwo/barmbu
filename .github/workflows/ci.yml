@@ -1,0 +1,80 @@
+# Tests every push / pull request. Pushing a tag like v2.1.0 also builds the
+# .deb, .rpm, source tarball and aarch64 Flatpak and attaches them to a
+# GitHub Release (which the tool's own update check then finds).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -q && sudo apt-get install -yq desktop-file-utils appstream
+      - run: make test
+
+  deb-and-tarball:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match __version__
+        run: |
+          v=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/barmbu.py)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$v"; exit 1; }
+      - run: make deb dist
+      - uses: actions/upload-artifact@v4
+        with: { name: deb-tar, path: "dist/*" }
+
+  rpm:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:45
+    steps:
+      - run: dnf -y -q install rpm-build make python3 tar gzip
+      - uses: actions/checkout@v4
+      - run: make rpm
+      - uses: actions/upload-artifact@v4
+        with: { name: rpm, path: "dist/*.rpm" }
+
+  flatpak:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-24.04-arm          # the users are on ARM, so build aarch64
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.amruthwo.Barmbu.yml
+          bundle: barmbu-${{ github.ref_name }}-aarch64.flatpak
+          arch: aarch64
+          cache-key: flatpak-builder-${{ github.sha }}
+
+  release:
+    needs: [deb-and-tarball, rpm, flatpak]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l out
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a9b7a"/>
+      <stop offset="1" stop-color="#1f6b55"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfeee8"/>
+    </linearGradient>
+  </defs>
+  <!-- chip-like tile -->
+  <rect x="12" y="12" width="104" height="104" rx="22" fill="url(#bg)"/>
+  <g fill="#9fd9c4" opacity="0.55">
+    <rect x="30" y="4" width="6" height="10" rx="2"/><rect x="50" y="4" width="6" height="10" rx="2"/>
+    <rect x="72" y="4" width="6" height="10" rx="2"/><rect x="92" y="4" width="6" height="10" rx="2"/>
+    <rect x="30" y="114" width="6" height="10" rx="2"/><rect x="50" y="114" width="6" height="10" rx="2"/>
+    <rect x="72" y="114" width="6" height="10" rx="2"/><rect x="92" y="114" width="6" height="10" rx="2"/>
+    <rect x="4" y="40" width="10" height="6" rx="2"/><rect x="4" y="62" width="10" height="6" rx="2"/>
+    <rect x="4" y="84" width="10" height="6" rx="2"/><rect x="114" y="40" width="10" height="6" rx="2"/>
+    <rect x="114" y="62" width="10" height="6" rx="2"/><rect x="114" y="84" width="10" height="6" rx="2"/>
+  </g>
+  <!-- nozzle -->
+  <rect x="50" y="24" width="28" height="14" rx="3" fill="#f2f7f5"/>
+  <path d="M56 38h16l-5 12h-6z" fill="#f2f7f5"/>
+  <circle cx="64" cy="55" r="2.6" fill="#ffd166"/>
+  <!-- layered cube being printed -->
+  <path d="M64 62l26 12-26 12-26-12z" fill="url(#top)"/>
+  <path d="M38 74l26 12v20L38 94z" fill="#cfe5dc"/>
+  <path d="M90 74L64 86v20l26-12z" fill="#b5d6c9"/>
+  <g stroke="#1f6b55" stroke-width="1.4" opacity="0.35">
+    <path d="M38 80l26 12 26-12"/><path d="M38 86l26 12 26-12"/><path d="M38 92l26 12 26-12"/>
+  </g>
+</svg>

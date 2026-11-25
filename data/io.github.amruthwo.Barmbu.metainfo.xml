@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.amruthwo.Barmbu</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>bARMbu Studio Helper</name>
+  <summary>Run Bambu Lab's network plugin on ARM Linux</summary>
+  <description>
+    <p>
+      Bambu Lab only builds Bambu Studio's network plugin for regular x86 PCs.
+      This app sets up an x86 copy of Bambu Studio that runs under FEX
+      emulation on ARM computers such as Apple Silicon Macs with Asahi Linux,
+      and installs the official plugin inside it.
+    </p>
+    <p>Not affiliated with Bambu Lab.</p>
+  </description>
+  <launchable type="desktop-id">io.github.amruthwo.Barmbu.desktop</launchable>
+  <developer id="io.github.amruthwo">
+    <name>barmbu contributors</name>
+  </developer>
+  <url type="homepage">https://github.com/amruthwo/barmbu</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-25">
+      <description><p>First public release.</p></description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,20 @@
+Package: barmbu
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.9), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, squashfs-tools
+Recommends: fex-emu, erofs-utils
+Suggests: flatpak
+Maintainer: amruthwo <amruthwo@users.noreply.github.com>
+Homepage: https://github.com/amruthwo/barmbu
+Description: Run Bambu Studio's official network plugin on ARM64 Linux
+ A small app (window + command line) that gets Bambu Lab's official network
+ plugin working on ARM64 Linux. Bambu only builds the plugin for x86_64, so on
+ ARM64 the app sets up an x86_64 copy of Bambu Studio under FEX-Emu and
+ installs the official plugin inside it. On x86_64 it just installs the
+ plugin.
+ .
+ It uses Bambu's unmodified plugin, which signs in with its own built-in
+ credentials. The automatic WebKit add-on needs a Fedora-based FEX root
+ filesystem and dnf.

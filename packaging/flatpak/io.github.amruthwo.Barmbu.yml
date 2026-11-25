@@ -1,0 +1,43 @@
+# Flatpak build of "bARMbu Studio Helper".
+#
+# The app sets things up on the *host* (emulator, a second Bambu Studio, files
+# in your home folder), so it asks for home access and runs host tools such as
+# muvm, unsquashfs and dnf through `flatpak-spawn --host`.  The native .rpm /
+# .deb are simpler if you can use them.
+#
+#   make flatpak      ->  dist/barmbu-<version>.flatpak
+#   flatpak install --user dist/barmbu-<version>.flatpak
+
+app-id: io.github.amruthwo.Barmbu
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: barmbu-gui
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=network
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: barmbu
+    buildsystem: simple
+    build-commands:
+      - make install-files PREFIX=/app
+    sources:
+      - type: dir
+        path: ../../src
+        dest: src
+      - type: dir
+        path: ../../data
+        dest: data
+      - type: file
+        path: ../../Makefile
+      - type: file
+        path: ../../README.md
+      - type: file
+        path: ../../LICENSE

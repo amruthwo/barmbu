@@ -1,0 +1,57 @@
+Name:           barmbu
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Run Bambu Studio's official network plugin on ARM64 Linux
+
+License:        GPL-3.0-or-later
+URL:            https://github.com/amruthwo/barmbu
+Source0:        %{name}-%{version}.tar.gz
+
+BuildArch:      noarch
+BuildRequires:  make
+
+Requires:       python3 >= 3.9
+Requires:       python3-gobject
+Requires:       gtk4
+Requires:       libadwaita
+Requires:       squashfs-tools
+Requires:       erofs-utils
+Requires:       cpio
+Requires:       rpm
+Recommends:     fex-emu
+Recommends:     muvm
+Recommends:     fex-emu-rootfs-fedora
+
+%description
+A small app (window + command line) that gets Bambu Lab's official network
+plugin working on ARM64 Linux, such as Apple Silicon Macs running Asahi.
+
+Bambu only builds the plugin for x86_64, so on ARM64 the app sets up an
+x86_64 copy of Bambu Studio that runs under FEX-Emu (inside muvm on 16K-page
+kernels), adds the WebKit libraries it needs from Fedora's own x86_64
+packages, and installs the official plugin. On x86_64 it just installs the
+plugin. It uses Bambu's unmodified plugin, which signs in with its own
+built-in credentials.
+
+%prep
+%setup -q
+
+%build
+# Pure Python; nothing to compile.
+
+%install
+make install-files DESTDIR=%{buildroot} PREFIX=%{_prefix}
+
+%files
+%{_bindir}/barmbu
+%{_bindir}/barmbu-gui
+%{_datadir}/barmbu/
+%{_datadir}/applications/io.github.amruthwo.Barmbu.desktop
+%{_datadir}/metainfo/io.github.amruthwo.Barmbu.metainfo.xml
+%{_datadir}/icons/hicolor/scalable/apps/io.github.amruthwo.Barmbu.svg
+%doc %{_docdir}/%{name}/README.md
+%license %{_docdir}/%{name}/LICENSE
+
+%changelog
+* Wed Nov 25 2026 amruthwo <amruthwo@users.noreply.github.com> - @VERSION@-1
+- Graphical app, muvm support for Asahi, automatic WebKit add-on.

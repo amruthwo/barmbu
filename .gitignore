@@ -1,0 +1,15 @@
+# Build output (recreate with `make`; attach packages to GitHub Releases instead)
+/build/
+/dist/
+__pycache__/
+*.pyc
+
+# Never commit Bambu's proprietary plugin binaries or credentials
+*.so
+*.so.*
+*.dylib
+*.pem
+*.AppImage
+
+# Local review / scratch
+/Review for deletion/

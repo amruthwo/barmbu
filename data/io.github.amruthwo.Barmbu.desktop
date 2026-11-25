@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=bARMbu Studio Helper
+GenericName=Bambu network plugin setup
+Comment=Set up Bambu Studio with Bambu Lab's network plugin on an ARM computer
+Exec=barmbu-gui
+Icon=io.github.amruthwo.Barmbu
+Terminal=false
+Categories=Utility;
+Keywords=Bambu;3D;printer;plugin;FEX;ARM;Asahi;
+StartupNotify=true
