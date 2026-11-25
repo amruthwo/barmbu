@@ -223,7 +223,8 @@ Heads-Up: On my P1S, video playback was never really smooth, and under emulation
 the playback is less than perfect.  I would say it's functional, but momentary
 video cutouts and low frame rates are typical. On my machine, the 3D view is 
 pretty smooth under emulation, but slicing seems to take slightly longer.  I 
-can confirm that I'm able to connect to and printing on my printer. 
+can confirm that I'm able to connect to and printing on my printer. For monitoring
+prints in progress, I use the Bambu Handy app on my phone for a better experience.
 
 If the 3D view misbehaves on your machine, that's the emulator's graphics path, 
 not the plugin.
