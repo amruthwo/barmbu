@@ -1,4 +1,4 @@
-# bARMbu Studio Helper
+# B***ARM***bu Studio Helper
 
 [![CI](https://github.com/amruthwo/barmbu/actions/workflows/ci.yml/badge.svg)](https://github.com/amruthwo/barmbu/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/amruthwo/barmbu)](https://github.com/amruthwo/barmbu/releases/latest)
